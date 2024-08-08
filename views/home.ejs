@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <style>
+        .editable {
+            /* Removed border styling */
+            padding: 5px;
+            cursor: pointer;
+        }
+        .hidden {
+            display: none;
+        }
+        .image-container {
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .image-container img {
+            max-width: 100%;
+            display: block;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+        .image-container input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            padding: 5px;
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, 0.7); /* Slightly transparent background for input */
+        }
+    </style>
+</head>
+<body>
+    <% if (isAdmin) { %>
+        <form id="logout-form" action="/logout" method="GET">
+            <button type="submit">Logout</button>
+        </form>
+    <% } else { %>
+        <a href="/login">Admin Login</a>
+    <% } %>
+
+    <h1 id="title" class="editable"><%= title %></h1>
+    <div id="images">
+        <% images.forEach(function(image, index) { %>
+            <div class="image-container" data-index="<%= index %>">
+                <img src="<%= image %>" alt="Dynamic Image" />
+                <% if (isAdmin) { %>
+                    <input type="text" class="hidden" value="<%= image %>" />
+                <% } %>
+            </div>
+        <% }) %>
+    </div>
+    <p id="description" class="editable"><%= description %></p>
+
+    <% if (isAdmin) { %>
+        <div>
+            <input type="text" id="newImageUrl" placeholder="Enter image URL" />
+            <button id="addImageButton">Add Image URL</button>
+        </div>
+    <% } %>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const title = document.getElementById('title');
+            const description = document.getElementById('description');
+            const imagesContainer = document.getElementById('images');
+            const newImageUrl = document.getElementById('newImageUrl');
+            const addImageButton = document.getElementById('addImageButton');
+            const editableElements = document.querySelectorAll('.editable');
+            const isAdmin = <%= JSON.stringify(isAdmin) %>;
+
+            // Function to handle double-click to edit
+            function handleEdit(element) {
+                const originalContent = element.innerText;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = originalContent;
+                input.classList.add('editable-input');
+                element.innerHTML = '';
+                element.appendChild(input);
+                input.focus();
+
+                input.addEventListener('blur', () => {
+                    const newValue = input.value;
+                    element.innerText = newValue;
+
+                    fetch('/update-text', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            field: element.id,
+                            value: newValue
+                        })
+                    });
+                });
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        input.blur();
+                    }
+                });
+            }
+
+            if (isAdmin) {
+                editableElements.forEach(element => {
+                    element.addEventListener('dblclick', () => handleEdit(element));
+                });
+
+                // Function to handle adding new image URL
+                addImageButton.addEventListener('click', () => {
+                    const url = newImageUrl.value;
+                    
+                    fetch('/update-image-url', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ imageUrl: url })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        // Clear existing images
+                        imagesContainer.innerHTML = '';
+                        
+                        // Add updated images
+                        data.newImages.forEach((image, index) => {
+                            const div = document.createElement('div');
+                            div.classList.add('image-container');
+                            div.dataset.index = index;
+
+                            const img = document.createElement('img');
+                            img.src = image;
+                            img.alt = 'Dynamic Image';
+
+                            const input = document.createElement('input');
+                            input.type = 'text';
+                            input.classList.add('hidden');
+                            input.value = image;
+
+                            div.appendChild(img);
+                            div.appendChild(input);
+                            imagesContainer.appendChild(div);
+                        });
+                    });
+                });
+
+                // Function to handle double-click to edit image URL
+                imagesContainer.addEventListener('dblclick', (e) => {
+                    if (e.target.tagName === 'IMG') {
+                        const container = e.target.parentElement;
+                        const input = container.querySelector('input');
+                        const img = e.target;
+
+                        input.classList.remove('hidden');
+                        input.focus();
+
+                        input.addEventListener('blur', () => {
+                            const newUrl = input.value;
+                            img.src = newUrl;
+                            input.classList.add('hidden');
+
+                            // Update URL on the server
+                            const index = container.dataset.index;
+                            fetch('/update-image-url', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ imageUrl: newUrl, index: index })
+                            });
+                        });
+
+                        input.addEventListener('keydown', (e) => {
+                            if (e.key === 'Enter') {
+                                input.blur();
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
